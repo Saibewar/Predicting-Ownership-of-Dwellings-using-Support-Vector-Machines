@@ -1,0 +1,782 @@
+---
+title: "Code Implementation Written Homework 2"
+author: "Aishwarya Saibewar"
+date: "4/20/2023"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Importing the required libraries
+library(tidyverse)
+library(ISLR2)
+library(dplyr)
+library(tictoc)
+library(e1071)
+```
+
+# Loading the youth_data.Rdata file
+```{r}
+load("/Users/aishwaryasaibewar/Documents/SeattleUniversity-MSDS/Courses/SU Course Work/SPRING_2023/Statistical Machine Learning 2/Homework/Homework2/Dataset/Housing.Rdata")
+```
+
+
+```{r}
+#number of variables in the data
+length(data)
+```
+
+```{r}
+#Column names of the data
+colnames(data)
+```
+
+#### DATA CLEANING
+
+# Understanding the data
+
+```{r}
+#creating new dataframe with selected variables
+selected_data <-data %>%
+  dplyr::select(SERIAL,DENSITY,OWNERSHP,COSTELEC,COSTWATR,ROOMS,HHINCOME,BUILTYR2,BEDROOMS,VEHICLES,NFAMS,NCOUPLES,DENSITY,HHINCOME,AGE,EDUC,MARST,BUILTYR2) 
+```
+
+```{r}
+#As every family has multiple inhabitants and SERIAL is the same for everyone from the family. Consider the Oldest member of every family as the "Owner". Consider the person in the first row as the "Owner" if there are multiple members of the house of the same age.
+
+housing_data <- selected_data %>%
+  group_by(SERIAL) %>% # Group the data based on SERIAL identification number of each family
+  filter(AGE == max(AGE)) %>% #Filter the oldest members in the family and consider them as the owner of that household
+  slice(1) %>% # If there are multiple old members with same age, choose the person in the first row
+  ungroup()
+```
+
+```{r}
+#Cross-verify to check if there are any duplicate serial id's
+# number of households
+length(housing_data$SERIAL)
+```
+
+```{r}
+#number of Unique households
+length(unique(housing_data$SERIAL))
+```
+
+
+#Find the count of missing values in each column
+```{r}
+missingcolumns <- colSums(is.na(housing_data))
+missingcolumns
+```
+
+
+
+# Below are the descriptions and needed manipulations for each variable
+
+# DENSITY
+```{r}
+attr(housing_data$DENSITY, 'var_desc')
+```
+
+
+```{r}
+# Unique values of DENSITY
+unique(housing_data$DENSITY)
+```
+
+
+
+# OWNERSHP 
+
+```{r}
+attr(housing_data$OWNERSHP, 'var_desc')
+```
+
+```{r}
+# Unique values of OWNERSHP
+unique(housing_data$OWNERSHP)
+```
+
+```{r}
+#Convert the values to meaningful categories
+housing_data$OWNERSHP <- ifelse(housing_data$OWNERSHP == 1, 'Owner', 'Renter') # Owner if the dwelling is occupied by Owner
+                                                                               # Renter if not
+```
+
+
+
+# COSTELEC
+
+```{r}
+attr(housing_data$COSTELEC, 'var_desc')
+```
+
+
+```{r}
+# Unique values of COSTELEC
+unique(housing_data$COSTELEC)
+```
+
+```{r}
+#Manipulating Annual Electricity Cost
+#Since there is either no charge or the charge is included in the rent consider the value of COSTELEC for these records as 0
+
+housing_data$COSTELEC[housing_data$COSTELEC %in% c(9993, 9994,9995,9996,9997,9998)] <- 0
+```
+
+
+```{r}
+# verify the unique values
+unique(housing_data$COSTELEC)
+```
+```{r}
+#Find the rows in the data where the COSTELEC is 0. This suggests that there are 1257 NA values of COSTELEC in the data.
+
+sum(housing_data$COSTELEC == 0)
+
+```
+
+```{r}
+ # Histogram of COSTELEC
+ggplot(housing_data, aes(x = COSTELEC)) + geom_histogram() +labs(title = "Histogram of COSTELEC column", x = "Cost of Electricity", y = "Frequency")
+```
+
+```{r}
+#Find the median of the COSTELEC column
+median_value <- median(housing_data$COSTELEC, na.rm = TRUE)
+```
+
+
+```{r}
+#Since median is less likely to be affected by outliers use median
+# Imputing the missing values with the median
+housing_data$COSTELEC[is.na(housing_data$COSTELEC)] <- median_value
+
+```
+
+
+
+
+#COSTWATR
+
+```{r}
+attr(housing_data$COSTWATR, 'var_desc')
+```
+
+
+```{r}
+#Unique values of COSTWATR
+unique(housing_data$COSTWATR) 
+```
+
+```{r}
+#Manipulating Annual Water Cost
+#Since there is either no charge or the charge is included in the rent consider the value of COSTWATR for these records as 0
+
+housing_data$COSTWATR[housing_data$COSTWATR %in% c(9993,9995,9997,9998)] <- 0
+```
+
+
+```{r}
+# Verify the unique values
+unique(housing_data$COSTWATR)
+```
+
+```{r}
+#Find the rows in the data where the ROOMS is 0. This suggests that there are 8611 NA values of COSTWATR in the data.
+
+sum(housing_data$COSTWATR == 0)
+```
+
+```{r}
+ #Histogram of COSTWATR
+ggplot(housing_data, aes(x = COSTWATR)) +geom_histogram() +labs(title = "Histogram of COSTWATR column", x = "Cost of Water", y = "Frequency")
+```
+
+```{r}
+# Find the median of the COSTWATR column
+median_value <- median(housing_data$COSTWATR, na.rm = TRUE)
+```
+
+
+```{r}
+#Since median is less likely to be affected by outliers use median
+# Imputing the missing values with the median
+housing_data$COSTWATR[is.na(housing_data$COSTWATR)] <- median_value
+```
+
+
+
+# ROOMS 
+```{r}
+attr(housing_data$ROOMS, 'var_desc')
+```
+
+```{r}
+#Unique values of ROOMS
+unique(housing_data$ROOMS)
+```
+
+```{r}
+#Find the rows in the data where the ROOMS is 0. This suggests that there are no NA values of ROOMS in the data.
+
+sum(housing_data$ROOMS == 0)
+```
+
+
+# HHINCOME 
+```{r}
+attr(housing_data$HHINCOME, 'var_desc')
+```
+
+```{r}
+#Unique values of HHINCOME
+#unique(housing_data$HHINCOME)
+```
+
+
+
+```{r}
+#Find the rows in the data where the household income is 9999999.This suggests that there are no NA values of HHINCOME in the data.
+
+sum(housing_data$HHINCOME == 9999999)
+```
+
+# BUILTYR2
+
+```{r}
+attr(housing_data$BUILTYR2, 'var_desc')
+```
+
+
+```{r}
+#Unique values of BUILTYR2
+unique(housing_data$BUILTYR2)
+```
+
+```{r}
+#Find the rows in the data where the Built in year is 0. This suggests that there are no NA values of BUILTYR2 in the data.
+
+sum(housing_data$BUILTYR2 == 0)
+```
+
+```{r}
+#Convert it into a numerical data by choosing a particular value in the range of values.
+
+housing_data$BUILTYR2<- ifelse(housing_data$BUILTYR2 == 1, 1939,
+                        ifelse(housing_data$BUILTYR2 == 2, 1945,
+                        ifelse(housing_data$BUILTYR2 == 3, 1955,
+                        ifelse(housing_data$BUILTYR2 == 4, 1965,
+                        ifelse(housing_data$BUILTYR2 == 5, 1975,
+                        ifelse(housing_data$BUILTYR2 == 6, 1985,
+                        ifelse(housing_data$BUILTYR2 == 7, 1992,
+                        ifelse(housing_data$BUILTYR2 == 8, 1997,
+                        ifelse(housing_data$BUILTYR2 == 9, 2003,housing_data$BUILTYR2)))))))))
+```
+
+
+
+
+# BEDROOMS 
+```{r}
+attr(housing_data$BEDROOMS, 'var_desc')
+```
+
+```{r}
+attr(housing_data$OWNERSHP, 'labels')
+```
+
+```{r}
+#Unique values of BEDROOMS
+unique(housing_data$BEDROOMS)
+```
+
+
+```{r}
+#According to labeling, number of bedrooms is equal to 'label number' minus 1
+
+housing_data$BEDROOMS<-housing_data$BEDROOMS-1
+head(housing_data)
+```
+
+
+#VEHICLES
+
+```{r}
+attr(housing_data$VEHICLES, 'var_desc')
+```
+
+```{r}
+# Unique values of NFAMS
+unique(housing_data$VEHICLES)
+```
+
+```{r}
+#Find the rows in the data where the VEHICLES is 0. This suggests that there are NA values of VEHICLES in the data.
+
+sum(housing_data$VEHICLES == 0)
+```
+
+```{r}
+# Set the "No vehicles available" to 0
+housing_data$VEHICLES[housing_data$VEHICLES == 9] <- 0
+```
+
+
+
+# NFAMS 
+```{r}
+attr(housing_data$NFAMS, 'var_desc')
+```
+
+```{r}
+# Unique values of NFAMS
+unique(housing_data$NFAMS)
+```
+
+
+# NCOUPLES 
+```{r}
+attr(housing_data$NCOUPLES, 'var_desc')
+```
+
+```{r}
+# Unique values of NCOUPLES
+unique(housing_data$NCOUPLES)
+```
+
+
+# AGE
+```{r}
+attr(housing_data$AGE, 'var_desc')
+```
+
+```{r}
+# Unique values of AGE
+unique(housing_data$AGE)
+```
+
+
+
+# EDUC
+```{r}
+attr(housing_data$EDUC, 'var_desc')
+```
+
+```{r}
+# Unique values of EDUC
+unique(housing_data$EDUC)
+```
+
+
+```{r}
+#Encoding the categorical variable (EDUC)
+#housing_data <- housing_data %>%
+#  mutate(HAS_COLLEGE_DEGREE = ifelse(EDUC >= 7, 1, 0),
+#         HAS_SCHOOLING = ifelse(EDUC <=6, 1, 0))
+```
+
+
+
+
+# MARST 
+```{r}
+attr(housing_data$MARST, 'var_desc')
+```
+
+```{r}
+# Unique values of MARST
+unique(housing_data$MARST)
+```
+
+
+```{r}
+#Encoding the categorical variable (Marital Status)
+housing_data <- housing_data %>%
+  mutate(IS_MARRIED = ifelse(MARST == 1 | MARST == 2, 1, 0),
+         IS_SEPARATED = ifelse(MARST == 3, 1, 0),
+         IS_DIVORCED = ifelse(MARST == 4, 1, 0),
+         IS_WIDOWED = ifelse(MARST == 5, 1, 0),
+         IS_SINGLE = ifelse(MARST == 6, 1, 0))
+```
+
+
+
+
+
+```{r}
+#str(housing_data)
+```
+
+
+
+#Filter the owners who are single
+```{r}
+#x <- housing_data %>%
+#  filter(IS_SINGLE == 1)
+#x
+```
+
+#Filter the household data with who are married
+```{r}
+housing_data <- housing_data %>%
+  filter(IS_MARRIED == 1)
+```
+
+
+```{r}
+#Converting the response variable to factors
+housing_data$OWNERSHP<- as.factor(housing_data$OWNERSHP)
+```
+
+
+
+#Rename the column names of housing_data
+
+```{r}
+colnames(housing_data) <- c(("SERIAL"),("POPULATION_DENSITY"),("HOMEOWNERSHIP"),("ELECTRICITY_COST"),("WATER_COST"),("ROOMS"),("HOUSEHOLD_INCOME"),("BUILT_IN_YEAR"),("BEDROOMS"),("VEHICLES"),("NFAMS"),("NCOUPLES"),("AGE"),("EDUCATION_LEVEL"),("MARITAL_STATUS"),("IS_MARRIED"),("IS_SEPARATED"),("IS_DIVORCED"),("IS_WIDOWED"),("IS_SINGLE"))
+
+```
+
+
+
+# PROBLEM-1
+
+# Linear SVM Model
+
+#Fit the model one the data where the owner is the oldest married member of the family
+
+
+```{r}
+#creating new dataframe with selected variables
+
+#linear model---- HOMEOWNERSHIP,POPULATION_DENSITY,ELECTRICITY_COST,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE,VEHICLES
+#polynomial model---- HOMEOWNERSHIP,ELECTRICITY_COST,WATER_COST,VEHICLES,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE
+#radial model---- HOMEOWNERSHIP,WATER_COST,ROOMS,HOUSEHOLD_INCOME,VEHICLES,NCOUPLES,POPULATION_DENSITY
+
+linear_data <-housing_data %>%
+  dplyr::select(HOMEOWNERSHIP,POPULATION_DENSITY,ELECTRICITY_COST,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE,VEHICLES) 
+
+```
+
+
+
+```{r}
+#Split the data into train and test by considering 50% of data as training data and reserving the remaining 50% of data as test data
+
+set.seed(1)
+train <- sample(nrow(linear_data) * 0.5)
+linear.train <- linear_data[train, ]
+linear.test <- linear_data[-train, ]
+```
+
+
+```{r}
+#Tune the model at different values of cost
+set.seed(1)
+tic()
+tune.out.linear <- tune(svm, HOMEOWNERSHIP ~ . , data = linear.train, kernel = "linear", 
+    ranges = list(cost = c(0.01, 0.1,0.5,0.75, 1, 10)))
+toc()
+```
+
+```{r}
+summary(tune.out.linear)
+```
+
+
+```{r}
+bestmodel_linear <- tune.out.linear$best.model
+summary(bestmodel_linear)
+```
+
+
+
+```{r}
+#Training error
+ypred <- predict(bestmodel_linear, linear.train)
+table(predict = ypred, truth = linear.train$HOMEOWNERSHIP)
+training.err<- mean(ypred != linear.train$HOMEOWNERSHIP)
+cat("Training  error rate for SVM model using linear kernel is  ", training.err)
+```
+
+```{r}
+#Test error
+ypred <- predict(bestmodel_linear, linear.test)
+table(predict = ypred, truth = linear.test$HOMEOWNERSHIP)
+test.err <- mean(ypred != linear.test$HOMEOWNERSHIP)
+cat("Test error rate for SVM model using linear kernel is  ", test.err)
+```
+
+
+```{r}
+#Understand the strongest predictors in the model
+w <- t(bestmodel_linear$coefs) %*% bestmodel_linear$SV
+w
+```
+
+```{r}
+plot(bestmodel_linear, linear.train,AGE~HOUSEHOLD_INCOME)
+plot(bestmodel_linear, linear.train,ROOMS~HOUSEHOLD_INCOME)
+plot(bestmodel_linear, linear.train,BEDROOMS~AGE)
+plot(bestmodel_linear, linear.train,BEDROOMS~HOUSEHOLD_INCOME)
+```
+
+First, a linear kernel was used in the SVM model to predict the ownership of a dwelling. The model was tuned for different values of cost on the training data and the optimal value of cost was selected through cross-validation. The best model has a cost of 0.75 and an error rate of 13.8% on the test data. This model was developed using 8 predictors and the strongest pair of predictors were selected to display the relationship between the variables. An SVM plot is shown in Figure 1. The household income and the number of rooms are plotted on the x and y axes, respectively. In the below plot, the yellow highlighted area reflects the region of feature space of the ‘Owner’ class and the area highlighted in red represents class ‘Renter’. In addition, the support vectors are represented by ‘x’ and the non-support vectors are represented by ‘o’. Since the kernel is linear, the resulting plot also includes a linear decision boundary separating the two classes. Despite the decision boundary clearly separating the two classes, a few data points have been misclassified.
+
+
+
+```{r}
+# Fit the best linear model and note the time taken to run the model 
+tic()
+svmfit_linear <- svm(HOMEOWNERSHIP ~ . , data = linear.train, kernel = "linear", cost = 0.75)
+toc()
+
+```
+
+
+
+
+
+# PROBLEM-2
+
+# Polynomial SVM Model
+
+#Fit the model one the data where the owner is the oldest married member of the family
+
+
+```{r}
+#creating new dataframe with selected variables
+
+#linear model---- HOMEOWNERSHIP,POPULATION_DENSITY,ELECTRICITY_COST,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE,VEHICLES
+#polynomial model---- HOMEOWNERSHIP,ELECTRICITY_COST,WATER_COST,VEHICLES,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE
+#radial model---- HOMEOWNERSHIP,WATER_COST,ROOMS,HOUSEHOLD_INCOME,VEHICLES,NCOUPLES,POPULATION_DENSITY
+
+polynomial_data <-housing_data %>%
+  dplyr::select(HOMEOWNERSHIP,ELECTRICITY_COST,WATER_COST,VEHICLES,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE)
+```
+
+
+
+```{r}
+#Split the data into train and test by considering 70% of data as training data and reserving the remaining 30% of data as test data
+
+set.seed(1)
+train <- sample(nrow(polynomial_data) * 0.5)
+polynomial.train <- polynomial_data[train, ]
+polynomial.test <- polynomial_data[-train, ]
+```
+
+
+```{r}
+#Tune the model at different values of cost,degree,coef0
+
+tic()
+set.seed(1)
+tune.out.polynomial <- tune(svm, HOMEOWNERSHIP ~ ., data = polynomial.train, 
+    kernel = "polynomial", 
+    ranges = list(
+      degree= c(2,3,4),
+      cost = c(0.01,0.05,0.1,0.5,0.75, 1, 10),
+      coef0 = c(0,1)
+    )
+  )
+toc()
+```
+
+Approx-- 9-10 min
+
+```{r}
+summary(tune.out.polynomial)
+```
+
+
+```{r}
+bestmodel_polynomial <- tune.out.polynomial$best.model
+summary(bestmodel_polynomial)
+```
+
+
+
+```{r}
+#Training error
+ypred <- predict(bestmodel_polynomial, polynomial.train)
+table(predict = ypred, truth = polynomial.train$HOMEOWNERSHIP)
+training.err<- mean(ypred != polynomial.train$HOMEOWNERSHIP)
+cat("Training error rate for SVM model using polynomial kernel is ", training.err)
+```
+
+```{r}
+#Test error
+ypred <- predict(bestmodel_polynomial, polynomial.test)
+table(predict = ypred, truth = polynomial.test$HOMEOWNERSHIP)
+test.err <- mean(ypred != polynomial.test$HOMEOWNERSHIP)
+cat("Test error rate for SVM model using polynomial kernel is  ", test.err)
+```
+
+
+```{r}
+#Test error in a neat form as it has highest accuracy
+ypred <- predict(bestmodel_polynomial, polynomial.test)
+Predicted<-ypred
+Actual<-polynomial.test$HOMEOWNERSHIP
+table(Actual,Predicted)
+errorrate<- mean(Actual!=Predicted)
+cat("Test error rate for SVM model using polynomial kernel is ", errorrate)
+```
+
+```{r}
+accuracy<-mean(Actual==Predicted)
+cat("Test accuracy for SVM model using polynomial kernel is ", accuracy)
+```
+
+As the SVM model with a polynomial kernel performs better than all the other models the confusion matrix of this model is shown in Figure 2. The majority of the observations in the dataset could be attributed to owners, and the model correctly predicts 6772 out of 6894 observations. This can be justifiable as just a subset of data was considered for analysis purposes i.e., only the people who are married. Married individuals are more likely to settle down in a location that they call home and ultimately invest in owning a house as opposed to renting it.
+
+
+```{r}
+#Understand the strongest predictors in the model
+w <- t(bestmodel_polynomial$coefs) %*% bestmodel_polynomial$SV
+w
+```
+
+
+
+
+```{r}
+plot(bestmodel_polynomial, polynomial.train,ELECTRICITY_COST~BEDROOMS)
+plot(bestmodel_polynomial, polynomial.train,BEDROOMS~AGE)
+plot(bestmodel_polynomial, polynomial.train,VEHICLES~AGE)
+plot(bestmodel_polynomial, polynomial.train,VEHICLES~HOUSEHOLD_INCOME,xlab="Number of Vehicles",ylab="Household Income")
+
+```
+
+Next, a polynomial kernel was used in the SVM model to predict the ownership of a dwelling. The model was tuned for different values of cost, degree, and coef0 on the training data. Through cross-validation, the optimal value of the three hyperparameters was selected. The best model had a cost of 0.05, degree 4, coef0 of 1, and an error rate of 12.3% on the test data. This model was also developed using 8 predictors and the strongest pair of predictor variables were selected to display the relationship between the variables. Figure 2 shows the SVM plot with variables number of bedrooms and cost of electricity plotted on the x and y axes, respectively. The observations are separated by the curved decision boundary (since the kernel = polynomial) and the area shaded in yellow represents class ‘Owner’ while the area in red represents class ‘Renter’. The support vectors are represented by ‘x’ and the non-support vectors are represented by ‘o’. Also, it can be observed that a few observations have been incorrectly classified on either side of the decision boundary.
+
+
+```{r}
+#Note the time taken to fit the best polynomial model
+tic()
+svmfit_polynomial <- svm(HOMEOWNERSHIP ~ . , data = linear.train, kernel = "polynomial", degree=4, coef0 = 1, cost = 0.05)
+toc()
+
+```
+
+
+
+
+
+
+# PROBLEM-3
+
+# Radial SVM Model
+
+#Fit the model one the data where the owner is the oldest married member of the family
+
+
+```{r}
+#creating new dataframe with selected variables
+
+#linear model---- HOMEOWNERSHIP,POPULATION_DENSITY,ELECTRICITY_COST,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE,VEHICLES
+#polynomial model---- HOMEOWNERSHIP,ELECTRICITY_COST,WATER_COST,VEHICLES,ROOMS,HOUSEHOLD_INCOME,BUILT_IN_YEAR,BEDROOMS,AGE
+#radial model---- HOMEOWNERSHIP,WATER_COST,ROOMS,HOUSEHOLD_INCOME,VEHICLES,NCOUPLES,POPULATION_DENSITY
+
+
+radial_data <-housing_data %>%
+  dplyr::select(HOMEOWNERSHIP,WATER_COST,ROOMS,HOUSEHOLD_INCOME,VEHICLES,NCOUPLES,POPULATION_DENSITY) 
+```
+
+
+
+```{r}
+#Split the data into train and test by considering 50% of data as training data and reserving the remaining 50% of data as test data
+
+set.seed(1)
+train <- sample(nrow(radial_data) * 0.5)
+radial.train <- radial_data[train, ]
+radial.test <- radial_data[-train, ]
+```
+
+
+
+```{r}
+#Tune the model at different values of cost,gamma through cross-validation
+
+set.seed(1)
+tic()
+tune.out.radial <- tune(svm, HOMEOWNERSHIP ~ ., data = radial.train, 
+    kernel = "radial", 
+    ranges = list(
+      cost = c(0.01,0.1, 0.5, 0.75, 1, 10, 50),
+      gamma = c(0.5, 1, 2, 3, 4)
+    )
+  )
+toc()
+
+```
+
+```{r}
+summary(tune.out.radial)
+```
+
+
+```{r}
+bestmodel_radial <- tune.out.radial$best.model
+summary(bestmodel_radial)
+```
+
+```{r}
+#gamma of best radial modle
+bestmodel_radial$gamma
+```
+
+
+
+```{r}
+#Training error
+ypred <- predict(bestmodel_radial, radial.train)
+table(predict = ypred, truth = radial.train$HOMEOWNERSHIP)
+training.err<- mean(ypred != radial.train$HOMEOWNERSHIP)
+cat("Training error rate for SVM model using radial kernel is ", training.err)
+```
+
+```{r}
+#Test error
+ypred <- predict(bestmodel_radial, radial.test)
+table(predict = ypred, truth = radial.test$HOMEOWNERSHIP)
+test.err <- mean(ypred != radial.test$HOMEOWNERSHIP)
+cat("Test error rate for SVM model using radial kernel is", test.err)
+```
+
+
+```{r}
+#Understand the strongest predictors in the model
+w <- t(bestmodel_radial$coefs) %*% bestmodel_radial$SV
+w
+```
+
+
+```{r}
+plot(bestmodel_radial, radial.train,HOUSEHOLD_INCOME~ROOMS)
+plot(bestmodel_radial, radial.train,WATER_COST~NCOUPLES)
+plot(bestmodel_radial, radial.train,ROOMS~WATER_COST)
+plot(bestmodel_radial, radial.train,ROOMS~POPULATION_DENSITY,xlab="Number of Rooms",ylab="Population Density")
+```
+
+Lastly, a radial kernel was used in the SVM model to predict the ownership of a dwelling. On the training data, the model was tuned for various cost and gamma values. The best value for each of the three hyper parameters cost and gamma was determined through cross-validation. The best model had a cost of 1, a gamma of 0.5, and an error rate of 13.4% on the test data. This model was also developed using 5 predictors and the strongest pair of predictor variables were selected to display the relationship between the variables. Figure 2 shows the SVM plot with the population density and the number of rooms plotted on the x and y axes, respectively. The decision boundary is a radial curve (since the kernel is radial) separating the two classes with the area shaded in yellow representing class ‘Owner’ and the area in red representing class ‘Renter’. The support vectors are represented by ‘x’ and the non-support vectors are represented by ‘o’. Likewise, it very well may be seen that a few observations have been misclassified on either side of the decision boundary.
+
+```{r}
+#Note the time taken to fit the radial model
+tic()
+svmfit_radial <- svm(HOMEOWNERSHIP ~ ., data = radial.train, kernel = "radial", gamma = 0.5, cost = 1)
+toc()
+```
+
+
+
+
+
